@@ -1,0 +1,15 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+*.egg-info/
+
+# Downloaded and generated data (auto-created on first run)
+data/raw/
+data/processed/
+
+# Generated reports (reproducible from source)
+reports/scored_panel.parquet
+reports/experiment_panel.csv
