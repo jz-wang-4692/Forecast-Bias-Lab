@@ -248,7 +248,7 @@ def plot_experiment_readout(readout: pd.DataFrame) -> Path:
         [r["treatment"].replace("_", " ") for _, r in readout.iterrows()],
     )
     plt.xlabel("ATE on weekly long-lead inventory cost (negative = better)")
-    plt.title("Cluster-robust A/B readout: treatment vs raw XGBoost")
+    plt.title("Cluster-robust A/B readout: treatment vs raw ML forecast")
     plt.legend(loc="upper right")
     _savefig(path)
     return path
@@ -331,7 +331,7 @@ def write_markdown_report(
     lift_cost_reduction = ""
     if lift_p90 is not None and xgb is not None:
         r = 1.0 - lift_p90["inventory_cost"] / xgb["inventory_cost"]
-        lift_cost_reduction = f"The lift-factor p90 forecast reduces inventory cost by `{r:.1%}` vs raw XGBoost."
+        lift_cost_reduction = f"The lift-factor p90 forecast reduces inventory cost by `{r:.1%}` vs raw ML forecast."
 
     top_features = ", ".join(feature_importance.head(8)["feature_family"].tolist())
     correction_range = (
@@ -365,7 +365,7 @@ Generated: {date.today().isoformat()}
 
 This project evaluates demand-forecasting policies on public retail item-store sales data, with emphasis on **asymmetric loss optimization**, **lead-time-conditional bias correction**, **pinball-optimal lift factors**, and **A/B-style policy readout**.
 
-The best holdout forecast by asymmetric inventory cost is `{best['forecast']}`. The bias-corrected model achieves WAPE `{corrected['wape']:.3f}` and bias `{corrected['bias']:.3f}` on the final holdout window. Relative to the raw XGBoost forecast, correction reduces inventory cost by `{cost_reduction_vs_xgb:.1%}`; relative to the rolling/event baseline, it reduces inventory cost by `{cost_reduction_vs_baseline:.1%}`.
+The best holdout forecast by asymmetric inventory cost is `{best['forecast']}`. The bias-corrected model achieves WAPE `{corrected['wape']:.3f}` and bias `{corrected['bias']:.3f}` on the final holdout window. Relative to the raw ML forecast, correction reduces inventory cost by `{cost_reduction_vs_xgb:.1%}`; relative to the rolling/event baseline, it reduces inventory cost by `{cost_reduction_vs_baseline:.1%}`.
 
 {lift_cost_reduction}
 
@@ -383,7 +383,7 @@ The best holdout forecast by asymmetric inventory cost is `{best['forecast']}`. 
 ## Modeling Method
 
 1. Build lag, rolling-window, price, calendar, event, SNAP, stockout-risk, and simulated supplier-lead-time features.
-2. Train XGBoost on the historical train split with a log-demand target.
+2. Train a gradient-boosted model on the historical train split with a log-demand target.
 3. Score calibration and holdout periods.
 4. Fit **empirical-Bayes residual-ratio correction** on calibration by `category × store × lead_bucket × event_week`.
 5. Fit **pinball-optimal lift factors** on calibration by `lead_bucket × is_event_week`, using grid search over [0.5, 3.0] with shrinkage regularization.
@@ -407,7 +407,7 @@ Constraint enforced: `adj_p50 ≤ adj_p90` at every row.
 
 ## Experiment Readout
 
-The long-lead readout simulates a clustered A/B test: item-store series are hash-assigned to treatment/control, the treatment receives the candidate forecast, and the control receives the raw ML forecast. The estimator uses pre-period cost adjustment, lagged demand, event/SNAP flags, category/state/lead-bucket controls, and cluster-robust standard errors by item-store series.
+The long-lead readout simulates a clustered A/B test: item-store series are hash-assigned to treatment/control, the treatment receives the adjusted forecast, and the control receives the raw ML forecast. The estimator uses pre-period cost adjustment, lagged demand, event/SNAP flags, category/state/lead-bucket controls, and cluster-robust standard errors by item-store series.
 
 {experiment_md}
 
@@ -415,7 +415,7 @@ Interpretation: negative ATE means the treatment reduced weekly long-lead invent
 
 ## Key Insights
 
-1. **Forecast accuracy ≠ business cost.** The raw XGBoost model has the lowest WAPE but the highest inventory cost, because it systematically under-forecasts and the cost of under-forecasting (stockouts) is 4× the cost of over-forecasting (excess).
+1. **Forecast accuracy ≠ business cost.** The raw ML model can look strong on WAPE while performing poorly on inventory cost, because it systematically under-forecasts and the configured cost of under-forecasting is 9× the cost of over-forecasting.
 
 2. **Segment-level correction matters.** Both empirical-Bayes correction and pinball-optimal lift factors improve cost, but they work differently: EB correction adjusts the mean forecast toward observed demand ratios; lift factors directly optimize the quantile loss that drives inventory decisions.
 

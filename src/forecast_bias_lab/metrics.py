@@ -4,12 +4,12 @@ Forecast evaluation metrics with emphasis on asymmetric loss and pinball scoring
 The key insight this module encodes: WAPE and bias are useful diagnostics, but the
 decision-relevant metric for inventory planning is the asymmetric newsvendor cost.
 Under-forecasting is more expensive than over-forecasting when stockouts carry
-higher penalties than excess inventory — and this asymmetry is sharper for long-lead
+higher penalties than excess inventory, and this asymmetry is sharper for long-lead
 items where replenishment flexibility is limited.
 
 Pinball loss at τ=0.5 measures median accuracy; at τ=0.9 it measures the quality
 of a safety-stock-level forecast.  The τ=0.9 pinball penalizes under-forecast 9×
-more than over-forecast, mirroring the cost structure of high-service-level planning.
+more than over-forecast, matching the configured 9:1 shortage/excess cost ratio.
 """
 from __future__ import annotations
 

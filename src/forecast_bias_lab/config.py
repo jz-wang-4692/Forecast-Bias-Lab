@@ -36,7 +36,7 @@ FEATURE_PANEL_METADATA_PATH = PROCESSED_DIR / "weekly_feature_panel.metadata.jso
 # --- Pinball / asymmetric cost parameters ---
 PINBALL_TAU_P50 = 0.5
 PINBALL_TAU_P90 = 0.9
-UNDERAGE_COST = 4.0   # cost per unit of under-forecast (lost sale / stockout)
+UNDERAGE_COST = 9.0   # cost per unit of under-forecast (lost sale / stockout)
 OVERAGE_COST = 1.0    # cost per unit of over-forecast (excess inventory)
 
 # --- Lift factor grid search ---

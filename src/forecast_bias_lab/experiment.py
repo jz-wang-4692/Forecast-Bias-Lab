@@ -1,9 +1,9 @@
 """
 Clustered A/B-style experiment readout for long-lead forecast policies.
 
-This module simulates what a real Labs-style launch readout would look like:
+This module simulates a clustered policy readout:
 series are hash-assigned to treatment/control, the treatment receives the
-candidate forecast policy, and the control receives the raw ML forecast.
+adjusted forecast policy, and the control receives the raw ML forecast.
 
 The estimator uses:
 - Pre-period cost adjustment (calibration-window baseline cost)
@@ -11,8 +11,8 @@ The estimator uses:
 - Cluster-robust standard errors by item-store series
 
 Two readouts are produced:
-1. Bias-corrected vs raw XGBoost
-2. Lift-factor p90 vs raw XGBoost
+1. Bias-corrected vs raw ML forecast
+2. Lift-factor p90 vs raw ML forecast
 
 The paired counterfactual delta is also reported because this offline backtest
 observes both potential outcomes for every row.  In a live experiment, only the
@@ -93,7 +93,7 @@ def run_experiment_readout(
     """Run multi-arm experiment readout on the holdout period.
 
     Returns (experiment_panel, readout_table) where readout_table has one row
-    per treatment arm compared against the raw XGBoost control.
+    per treatment arm compared against the raw ML control.
     """
     calibration = scored_panel.loc[scored_panel["split"].eq("calibration")].copy()
     test = scored_panel.loc[
@@ -122,7 +122,7 @@ def run_experiment_readout(
         test["is_event_week"].eq(1) | test["is_snap_heavy_week"].eq(1)
     ).astype(int)
 
-    # Readout 1: bias-corrected vs raw XGBoost
+    # Readout 1: bias-corrected vs raw ML
     readout_bias = _run_single_readout(
         test,
         treatment_cost_col="xgb_bias_corrected_cost",
@@ -131,7 +131,7 @@ def run_experiment_readout(
         control_label="xgb_forecast",
     )
 
-    # Readout 2: lift-factor p90 vs raw XGBoost
+    # Readout 2: lift-factor p90 vs raw ML
     readout_lift = _run_single_readout(
         test,
         treatment_cost_col="lift_p90_cost",

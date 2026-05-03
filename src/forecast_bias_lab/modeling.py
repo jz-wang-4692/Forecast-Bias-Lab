@@ -1,10 +1,10 @@
 """
-Modeling pipeline: XGBoost demand model, empirical-Bayes bias correction,
+Modeling pipeline: gradient-boosted demand model, empirical-Bayes bias correction,
 and pinball-optimal lift factors.
 
 The pipeline produces four forecast variants for comparison:
 1. baseline_forecast — rolling mean with event/trend multipliers
-2. xgb_forecast — raw XGBoost point forecast (log-demand target)
+2. xgb_forecast — raw gradient-boosted point forecast (log-demand target)
 3. xgb_bias_corrected — empirical-Bayes residual-ratio correction
 4. lift_p50_forecast / lift_p90_forecast — pinball-optimal lift factors
 
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from xgboost import XGBRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor
 
 from forecast_bias_lab.config import (
     DEFAULT_CALIBRATION_WEEKS,
@@ -111,28 +111,61 @@ def _design_matrix(train: pd.DataFrame, apply: pd.DataFrame) -> tuple[pd.DataFra
     return combined.loc["train"], combined.loc["apply"]
 
 
+def _fallback_importance(x_train: pd.DataFrame, y: pd.Series) -> np.ndarray:
+    """Correlation-based importance used when model-native importance is unavailable."""
+    x = x_train.to_numpy(dtype=float)
+    y_arr = y.to_numpy(dtype=float)
+    x = x - np.nanmean(x, axis=0)
+    y_arr = y_arr - np.nanmean(y_arr)
+    x_std = np.nanstd(x, axis=0)
+    y_std = np.nanstd(y_arr)
+    denom = np.where(x_std > 0, x_std * max(y_std, 1e-12), np.nan)
+    corr = np.nanmean(x * y_arr.reshape(-1, 1), axis=0) / denom
+    importance = np.abs(np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0))
+    total = importance.sum()
+    return importance / total if total > 0 else np.zeros_like(importance)
+
+
 def _fit_xgb(
     train: pd.DataFrame, apply: pd.DataFrame,
-) -> tuple[np.ndarray, XGBRegressor, list[str]]:
+) -> tuple[np.ndarray, object, list[str], np.ndarray]:
     x_train, x_apply = _design_matrix(train, apply)
     y = np.log1p(train["demand"].astype(float))
-    model = XGBRegressor(
-        n_estimators=320,
-        max_depth=4,
-        learning_rate=0.045,
-        subsample=0.86,
-        colsample_bytree=0.88,
-        objective="reg:squarederror",
-        reg_alpha=0.05,
-        reg_lambda=1.5,
-        min_child_weight=4,
-        random_state=RANDOM_SEED,
-        tree_method="hist",
-    )
-    model.fit(x_train, y)
+    try:
+        from xgboost import XGBRegressor
+
+        model = XGBRegressor(
+            n_estimators=320,
+            max_depth=4,
+            learning_rate=0.045,
+            subsample=0.86,
+            colsample_bytree=0.88,
+            objective="reg:squarederror",
+            reg_alpha=0.05,
+            reg_lambda=1.5,
+            min_child_weight=4,
+            random_state=RANDOM_SEED,
+            tree_method="hist",
+        )
+        model.fit(x_train, y)
+        importance = np.asarray(model.feature_importances_, dtype=float)
+    except Exception as exc:
+        print(
+            "XGBoost unavailable; falling back to sklearn HistGradientBoostingRegressor. "
+            f"Reason: {type(exc).__name__}.",
+        )
+        model = HistGradientBoostingRegressor(
+            max_iter=320,
+            learning_rate=0.045,
+            max_leaf_nodes=31,
+            l2_regularization=1.0,
+            random_state=RANDOM_SEED,
+        )
+        model.fit(x_train, y)
+        importance = _fallback_importance(x_train, y)
     pred = np.expm1(model.predict(x_apply))
     pred = np.clip(pred, 0.0, None)
-    return pred, model, x_train.columns.tolist()
+    return pred, model, x_train.columns.tolist(), importance
 
 
 def _baseline_forecast(df: pd.DataFrame) -> pd.Series:
@@ -196,9 +229,9 @@ def apply_bias_correction(
     return out.drop(columns=["correction_factor"])
 
 
-def _feature_importance(model: XGBRegressor, feature_names: list[str]) -> pd.DataFrame:
+def _feature_importance(feature_names: list[str], importance_values: np.ndarray) -> pd.DataFrame:
     importance = pd.DataFrame(
-        {"feature": feature_names, "importance": model.feature_importances_}
+        {"feature": feature_names, "importance": importance_values}
     )
 
     def family(feature: str) -> str:
@@ -251,8 +284,11 @@ def run_modeling(
 
     train = df.loc[df["split"].eq("train")].copy()
     apply_df = df.loc[df["split"].isin(["calibration", "test"])].copy()
-    print(f"Training XGBoost on {len(train):,} weekly rows; scoring {len(apply_df):,} rows.")
-    pred, model, feature_names = _fit_xgb(train, apply_df)
+    print(
+        f"Training gradient-boosted model on {len(train):,} weekly rows; "
+        f"scoring {len(apply_df):,} rows."
+    )
+    pred, model, feature_names, importance_values = _fit_xgb(train, apply_df)
     apply_df["xgb_forecast"] = pred
     df = df.merge(
         apply_df[["series_id", "week_start", "xgb_forecast"]],
@@ -311,7 +347,7 @@ def run_modeling(
             long_lead_share=("long_lead_eligible", "mean"),
         )
     )
-    feature_importance = _feature_importance(model, feature_names)
+    feature_importance = _feature_importance(feature_names, importance_values)
     return ModelingResult(
         scored, scorecard, correction_table, lift_table, feature_importance, split_summary,
     )

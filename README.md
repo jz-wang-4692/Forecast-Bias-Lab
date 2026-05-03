@@ -21,7 +21,7 @@ This project builds four forecast policies and compares them on the metric that 
 │   ├── data.py            # M5 download, weekly panel construction
 │   ├── features.py        # lag, rolling, price, event, lead-time, stockout features
 │   ├── metrics.py         # WAPE, bias, pinball loss, weighted pinball, newsvendor cost
-│   ├── modeling.py        # XGBoost training, EB correction, lift factor integration
+│   ├── modeling.py        # gradient-boosted model, EB correction, lift factor integration
 │   ├── lift_factors.py    # pinball-optimal multiplicative lift factors by segment
 │   ├── experiment.py      # clustered A/B readout with cluster-robust SEs
 │   ├── reporting.py       # figures, tables, markdown report
@@ -57,8 +57,8 @@ PYTHONPATH=src python -m forecast_bias_lab.run_project --sample-series-per-store
 ### 1. Demand Panel & Features
 Weekly product-node demand panel from real item-store retail data. Features include lag/rolling-window demand, price dynamics, calendar events, SNAP benefits, simulated supplier lead-time, and stockout-risk proxies.
 
-### 2. XGBoost Demand Model
-Point forecast trained on log-demand with train/calibration/test temporal split. The calibration window is used to fit post-hoc corrections without leaking test data.
+### 2. Gradient-Boosted Demand Model
+Point forecast trained on log-demand with train/calibration/test temporal split. The pipeline uses XGBoost when the local runtime supports it and falls back to scikit-learn gradient boosting otherwise, so the project remains runnable on a fresh desktop setup. The calibration window is used to fit post-hoc corrections without leaking test data.
 
 ### 3. Empirical-Bayes Bias Correction
 Residual-ratio correction by `category × store × lead_bucket × event_week`. Shrinkage toward the global ratio prevents overfitting in small segments.
@@ -74,25 +74,25 @@ The key analytical contribution. For each `lead_bucket × is_event_week` segment
 This produces two adjusted forecasts: `lift_p50_forecast` (median-targeting) and `lift_p90_forecast` (safety-stock-targeting).
 
 ### 5. Holdout Evaluation
-Five forecast policies compared on: WAPE, signed bias, under-forecast rate, pinball loss (τ=0.5, τ=0.9), demand-weighted pinball, and asymmetric inventory cost (underage=4, overage=1).
+Five forecast policies compared on: WAPE, signed bias, under-forecast rate, pinball loss (τ=0.5, τ=0.9), demand-weighted pinball, and asymmetric inventory cost (underage=9, overage=1).
 
 ### 6. Clustered A/B Readout
-Simulates a Labs-style launch experiment: series hash-assigned to treatment/control, with pre-period cost adjustment, covariate controls, and cluster-robust standard errors. Two treatment arms: bias-corrected and lift-factor p90.
+Simulates a clustered policy readout: series hash-assigned to treatment/control, with pre-period cost adjustment, covariate controls, and cluster-robust standard errors. Two treatment arms: bias-corrected and lift-factor p90.
 
 ## Key Results
 
-- The raw XGBoost model has the lowest WAPE but the **highest** inventory cost — it systematically under-forecasts.
-- Empirical-Bayes correction reduces inventory cost by ~22% vs raw XGBoost.
+- The raw ML model has strong WAPE but poor asymmetric-cost performance when it under-forecasts.
+- Empirical-Bayes correction reduces inventory cost by ~31% vs the raw ML forecast.
 - Pinball-optimal lift factors directly target the quantile loss that drives inventory decisions.
 - Long-lead segments show the largest improvement because cost asymmetry is sharpest there.
 - The A/B readout confirms statistically significant cost reduction with cluster-robust inference.
 
 ## Key Insight
 
-> Optimizing for WAPE produces a forecast that looks accurate but costs money.
+> Optimizing for WAPE can produce a forecast that looks accurate but costs money.
 > Optimizing for pinball loss at the service-level quantile produces a forecast
-> that looks biased but saves money.  The right metric depends on the decision
-> the forecast supports.
+> that may look upward-biased but better matches the inventory decision. The
+> right metric depends on the decision the forecast supports.
 
 ## Data Source
 
