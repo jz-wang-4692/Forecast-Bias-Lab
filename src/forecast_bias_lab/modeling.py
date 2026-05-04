@@ -2,11 +2,12 @@
 Modeling pipeline: gradient-boosted demand model, empirical-Bayes bias correction,
 and pinball-optimal lift factors.
 
-The pipeline produces four forecast variants for comparison:
+The pipeline produces five forecast variants for comparison:
 1. baseline_forecast — rolling mean with event/trend multipliers
 2. xgb_forecast — raw gradient-boosted point forecast (log-demand target)
 3. xgb_bias_corrected — empirical-Bayes residual-ratio correction
-4. lift_p50_forecast / lift_p90_forecast — pinball-optimal lift factors
+4. lift_p50_forecast — pinball-optimal p50 lift factor
+5. lift_p90_forecast — pinball-optimal p90 lift factor
 
 The central question: which policy minimizes asymmetric inventory cost,
 especially on long-lead items where replenishment flexibility is limited?

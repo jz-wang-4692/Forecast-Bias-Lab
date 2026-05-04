@@ -8,7 +8,7 @@ Uses the public M5 Forecasting Accuracy dataset (Walmart item-store daily unit s
 
 Standard forecast evaluation (WAPE, MAPE, RMSE) optimizes for the mean or median of the demand distribution. But inventory planning needs a *quantile* forecast — specifically, a forecast at the service-level target (e.g., p90). Under-forecasting is more expensive than over-forecasting when stockouts carry higher penalties than excess inventory, and this asymmetry is sharper for long-lead items where replenishment flexibility is limited.
 
-This project builds four forecast policies and compares them on the metric that actually matters: asymmetric inventory cost.
+This project builds five forecast policies and compares them on the metric that actually matters: asymmetric inventory cost.
 
 ## Project Shape
 
